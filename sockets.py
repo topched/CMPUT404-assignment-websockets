@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
-# Copyright (c) 2013-2014 Abram Hindle
+# Copyright (c) 2013-2014 Abram Hindle & Kris Kushniruk
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -81,7 +81,8 @@ class World:
 myWorld = World()        
 
 def set_listener( entity, data ):
-    ''' do something with the update ! '''
+    data = json.dumps({entity: data})
+    send_all(data);
 
 myWorld.add_set_listener( set_listener )
 
@@ -91,41 +92,36 @@ def hello():
     return flask.redirect("/static/index.html")
 
 
+'''A greenlet function that reads from the websocket and updates the world --
+			modified abram's websocket presentation'''
 def read_ws(ws,client):
-    '''A greenlet function that reads from the websocket and updates the world'''
-    # XXX: TODO IMPLEMENT ME
-    
-    try:
-        while True:
-            msg = ws.recieve()
-            print "WS RECV: %s" % msg
-            if (msg is not None):
 
-                '''Need to update the world here'''
-                packet = json.loads(msg)
-                send_all_json( packet )
-            else:
-                break;
-    except:
-        '''Done'''
+    while True:
+        msg = ws.receive()
+        print "WS RECV: %s" % msg
+        if (msg is not None):
+            packet = json.loads(msg)
+            for key in packet:
+                myWorld.set(key, packet[key])
+        else:
+            break;
 
 
-    return None
-
+'''Fufill the websocket URL of /subscribe, every update notify the
+       websocket and read updates from the websocket --
+       modified abram's websocket presentation'''
 @sockets.route('/subscribe')
 def subscribe_socket(ws):
-    '''Fufill the websocket URL of /subscribe, every update notify the
-       websocket and read updates from the websocket '''
     
     client = Client()
     clients.append(client)
     g = gevent.spawn( read_ws, ws, client)
-    print "Subscribing"
+    #print "Subscribing"
     try:
         while True:
             # block here
             msg = client.get()
-            print "Got a message"
+            #print "Got a message"
             ws.send(msg)
 
     except Exception as e:
@@ -135,8 +131,6 @@ def subscribe_socket(ws):
         clients.remove(client)
         gevent.kill(g)
 
-
-    return None
 
 '''Ah the joys of frameworks! They do so much work for you
        that they get in the way of sane operation!'''
@@ -151,13 +145,9 @@ def flask_post_json():
 #update a specific entity
 @app.route("/entity/<entity>", methods=['POST','PUT'])
 def update(entity):
-    
-    tmp = flask_post_json()
-
-    for key in tmp.keys():
-        myWorld.update(entity, key, tmp[key])
-
-    return json.dumps(myWorld.get(entity))
+    data = flask_post_json();
+    myWorld.set(entity, data);
+    return json.dumps(data);
 
 #return the world
 @app.route("/world", methods=['POST','GET'])    

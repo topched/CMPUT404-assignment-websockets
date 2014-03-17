@@ -6,7 +6,7 @@
     <meta content='width=device-width; height=device-height; initial-scale=1.0; maximum-scale=1.0; user-scalable=0;' name='viewport' />
     <meta name="viewport" content="width=device-width" />
     <meta name="license" content="
-        Copyright 2013 Google, Abram Hindle
+        Copyright 2013 Google, Abram Hindle & Kris Kushniruk
         
         Licensed under the Apache License, Version 2.0 (the "License");
         you may not use this file except in compliance with the License.
@@ -44,6 +44,8 @@ debug("Hello");
 
 world = {};
 
+clientColor = "";
+
 //XXX: TODO Make this prettier!
 function drawCircle(context,entity) {
     with(context) {
@@ -75,7 +77,6 @@ function clearFrame() {
 	fillStyle = "#000";
 	fillRect(0,0,W,H);
     }
-
 }
 
 // This actually draws the frame
@@ -122,13 +123,9 @@ function getPosition(e) {
 }
 
 function addEntity(entity, data) {
-    world[entity] = data;
-    drawNextFrame(); // (but should we?)
-    var url = '/entity/' + encodeURIComponent(entity);
-    sendJSONXMLHTTPRequest(url, data, function(ourJSON){
-
-    });
-
+    tmp = {};
+    tmp[entity] = data;
+    socket.send(JSON.stringify(tmp));
 }
 
 var counter = 0;
@@ -235,17 +232,15 @@ mouse = (function() {
 
 // Add the application specific mouse listeners!
 mouse.mousedowners.push(function(x,y,clicked,e) {
-    addEntityWithoutName({'x':x,'y':y,'colour':'red'});
+    addEntityWithoutName({'x':x,'y':y,'colour':clientColor});
 });
 
 mouse.mouseuppers.push(function(x,y,clicked,e) {
-    addEntityWithoutName({'x':x,'y':y,'colour':'red'});
+    addEntityWithoutName({'x':x,'y':y,'colour':clientColor});
 });
 
 mouse.mousedraggers.push(function(x,y,clicked,e) {
-    var colours = new Array('green', 'yellow', 'Orange', 'Aqua', 'blue');
-    var tmp = Math.floor((Math.random()*10))%5;
-    addEntityWithoutName({'x':x,'y':y,'colour':colours[tmp],
+    addEntityWithoutName({'x':x,'y':y,'colour':clientColor,
                           'radius':10});
 });
 
@@ -259,15 +254,38 @@ function wsSetup() {
     var url = "ws://"+host+"/subscribe";   
     socket = new WebSocket(url);
     socket.onopen = function() {
-        //XXX: TODO What are you going to do here?
+
+        //http get request for world -- gets the json object back
+        var xhr = new XMLHttpRequest();
+        var url2 = "http://" + host + "/world";
+        xhr.open("GET", url2, false);
+        xhr.send(null);
+        worldReturn = JSON.parse(xhr.responseText);
+
+        //set the world
+        for (var key in worldReturn){
+            world[key] = worldReturn[key];
+            //debug("world:" + world[key]);
+        }
+
+        //set the clients color
+        var colours = new Array('green', 'Violet', 'Orange', 'SandyBrown', 'blue', 'red');
+        var tmp = Math.floor((Math.random()*21))%6;
+        clientColor = colours[tmp];
+        //debug("Color:" + clientColor);
+
     };
     socket.onerror = function(msg) {
         debug("WebSocket Error:" + msg.data);
     };
     socket.onmessage = function(msg) {  
         try {
-            debug("WebSocket Recv:" + msg.data);
-            //XXX: TODO What are you going to do here?            
+            //debug("WebSocket Recv:" + msg.data);
+            var msg = JSON.parse(msg.data)
+            for (var key in msg){
+                world[key] = msg[key];
+                drawNextFrame();
+            }           
         } catch (e) {
             alert("socket on message: " + e);
         }
@@ -275,8 +293,6 @@ function wsSetup() {
 }
 
 wsSetup();
-
-
 
 // 30 frames per second
 setInterval( update, 1000/30.0);

@@ -5,7 +5,9 @@ CMPUT404-assignment-websockets
 
 See requirements.org (plain-text) for a description of the project.
 
-Make a shared state Websockets drawing program
+Make a shared state Websockets drawing program. 
+
+Each client will have their own color when their objects are drawn.
 
 Prereqs
 =======
